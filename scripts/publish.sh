@@ -31,7 +31,7 @@ if email != 'henrik.hestnes@hotmail.com':
     raise SystemExit('Set this repository\'s user.email to henrik.hestnes@hotmail.com before publishing.')
 if subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip() != 'main':
     raise SystemExit('Publish from the main branch.')
-allowed = {'Casks/macmural.rb', 'README.md', 'scripts/publish.sh', notes}
+allowed = {'Casks/macmural.rb', 'README.md', 'scripts/publish.sh', 'scripts/publish-tap.sh', notes}
 changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], text=True).splitlines())
 changed.update(subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], text=True).splitlines())
 if changed - allowed:
@@ -62,7 +62,7 @@ if [[ "${1:-}" == "--check" ]]; then
   exit 0
 fi
 
-# The user explicitly requested public GitHub hosting and this same-repo tap.
+# The user explicitly requested public GitHub hosting and a personal Homebrew tap.
 account=$(gh api user --jq .login)
 if [[ "${account:l}" != "henrikhestnes" ]]; then
   print -u2 "Sign gh in as henrikhestnes before publishing."
@@ -80,12 +80,12 @@ if git rev-parse --verify "$tag" >/dev/null 2>&1; then
   if ! git merge-base --is-ancestor "$tag^{commit}" HEAD || \
      ! git diff --quiet "$tag^{commit}" HEAD -- . \
        ':(exclude)Casks/macmural.rb' ':(exclude)README.md' \
-       ':(exclude)scripts/publish.sh' ":(exclude)$notes"; then
+       ':(exclude)scripts/publish.sh' ':(exclude)scripts/publish-tap.sh' ":(exclude)$notes"; then
     print -u2 "$tag contains different app code. Use a new app version instead of moving the tag."
     exit 1
   fi
 fi
-git add Casks/macmural.rb README.md scripts/publish.sh "$notes"
+git add Casks/macmural.rb README.md scripts/publish.sh scripts/publish-tap.sh "$notes"
 if ! git diff --cached --quiet; then
   git commit -m "Update Homebrew cask and release publishing for $tag"
 fi
@@ -154,7 +154,7 @@ if [[ "$(gh repo view "$repository" --json isPrivate --jq .isPrivate)" != "false
   print -u2 "Repository is not public."
   exit 1
 fi
+./scripts/publish-tap.sh "$tag"
 print "Published: https://github.com/$repository/releases/tag/$tag"
 print "Install with:"
-print "  brew tap henrikhestnes/macmural https://github.com/$repository.git"
-print "  brew install --cask henrikhestnes/macmural/macmural"
+print "  brew install --cask henrikhestnes/tap/macmural"

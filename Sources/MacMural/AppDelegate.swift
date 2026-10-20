@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toggleItem: NSMenuItem!
     private var clearItem: NSMenuItem!
     private var hotKey = GlobalHotKey()
+    private(set) var shortcuts = ShortcutConfiguration.load()
+    private var shortcutSettings: ShortcutSettingsWindow?
+    var toggleShortcutHint: String {
+        shortcuts[.toggle].display + (shortcuts.hyperEnabled ? " or Hyper+D" : "")
+    }
+    func shortcutLabel(_ action: ShortcutAction) -> String { shortcuts[action].display }
     private var keyMonitor: Any?
     private var previousApplication: NSRunningApplication?
     private var welcome: WelcomeWindow?
@@ -45,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKey.onInteractionKeyChange = { [weak self] held in
             self?.updateInteractionKey(held: held)
         }
-        shortcutErrors = hotKey.register().filter { $0.status != noErr }.map { "\($0.shortcut) (\($0.status))" }
+        shortcutErrors = hotKey.register(shortcuts).map { "\($0.shortcut) (\($0.status))" }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isEnabled else { return event }
             guard !self.isPassingThrough else { return event }
@@ -96,13 +102,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(name)
         menu.addItem(.separator())
         toggleItem = NSMenuItem(title: "Start Drawing", action: #selector(toggleDrawing), keyEquivalent: "d")
-        toggleItem.keyEquivalentModifierMask = [.command, .option]
+        toggleItem.keyEquivalent = shortcuts[.toggle].menuKey
+        toggleItem.keyEquivalentModifierMask = shortcuts[.toggle].modifiers.cocoa
         toggleItem.target = self
         menu.addItem(toggleItem)
         clearItem = NSMenuItem(title: "Clear Drawings", action: #selector(clearFromMenu), keyEquivalent: "")
         clearItem.target = self
         menu.addItem(clearItem)
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Keyboard Shortcuts…", action: #selector(showShortcutSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Shortcuts & Help…", action: #selector(showWelcome), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Quit MacMural", action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
@@ -157,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if enabled {
             previousApplication = NSWorkspace.shared.frontmostApplication
             welcome?.window.orderOut(nil)
+            shortcutSettings?.window.orderOut(nil)
         }
         inputState.setEnabled(enabled)
         previousEraserPoint = nil
@@ -167,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let status = hotKey.setInteractionKeyEnabled(enabled)
         isInteractionKeyHeld = enabled && hotKey.isInteractionKeyHeld
         if enabled {
-            interactionShortcutError = status == noErr ? nil : "Space (\(status))"
+            interactionShortcutError = status == noErr ? nil : "\(shortcutLabel(.interact)) (\(status))"
             inputState.updateInteractionKey(held: isInteractionKeyHeld,
                                             anyMouseButtonDown: NSEvent.pressedMouseButtons != 0)
         } else {
@@ -354,29 +363,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func clear() { inputState.endPointer(); previousEraserPoint = nil; pendingStroke = nil; stopLaser(); store.clear(); refresh() }
 
     private func handleKey(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-        if flags.contains(.command) {
-            if key == "z", !flags.contains(.option), !flags.contains(.control) {
-                if flags.contains(.shift) { redo() } else { undo() }
-                return true
+        let shortcut = KeyboardShortcut(event)
+        // Escape is always a way out, even after customizing the finish shortcut.
+        if shortcut == .escape { setEnabled(false); return true }
+        if let action = shortcuts.action(for: shortcut) {
+            if event.isARepeat && action != .undo && action != .redo { return true }
+            switch action {
+            case .arrow: selectTool(.arrow)
+            case .rectangle: selectTool(.rectangle)
+            case .laser: selectTool(.laser)
+            case .pen: selectTool(.pen)
+            case .eraser: selectTool(.eraser)
+            case .clear: clear()
+            case .undo: undo()
+            case .redo: redo()
+            case .thin: setWidth(2)
+            case .medium: setWidth(4)
+            case .thick: setWidth(7)
+            case .finish: setEnabled(false)
+            case .toggle, .interact: break // Handled globally by Carbon.
             }
-            if key == "q" { quit(); return true }
-            // Cmd-Tab and other system shortcuts remain available.
-            return false
+            return true
         }
-        if event.keyCode == 53 { setEnabled(false); return true }
-        guard !flags.contains(.control), !flags.contains(.option) else { return true }
-        if event.isARepeat { return true }
-        if let tool = DrawingTool.allCases.first(where: { $0.key == key }) { selectTool(tool); return true }
-        switch key {
-        case "c": clear()
-        case "1": setWidth(2)
-        case "2": setWidth(4)
-        case "3": setWidth(7)
-        default: break
-        }
-        return true
+        if shortcut == KeyboardShortcut(12, .command) { quit(); return true }
+        // Keep system Command shortcuts available; consume other typing on the canvas.
+        return !event.modifierFlags.contains(.command)
     }
 
     private func redrawCanvases() {
@@ -387,7 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         redrawCanvases()
         for panel in overlays {
             if let canvas = panel.contentView { panel.invalidateCursorRects(for: canvas) }
-            let state = !isEnabled ? "Drawing closed" : isPassingThrough ? "Space held or underlying drag in progress; interacting with underlying screen" : "Drawing enabled"
+            let state = !isEnabled ? "Drawing closed" : isPassingThrough ? "Interaction key held or underlying drag in progress; interacting with underlying screen" : "Drawing enabled"
             panel.contentView?.setAccessibilityValue("\(state); \(tool.title) mode; \(store.annotations.count) drawings; \(color.rawValue) ink; \(Int(lineWidth)) pt")
         }
         toolbar?.refresh(controller: self)
@@ -395,10 +406,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem?.state = isEnabled ? .on : .off
         clearItem?.isEnabled = !store.annotations.isEmpty
         statusItem?.button?.contentTintColor = isEnabled ? .systemMint : nil
-        statusItem?.button?.toolTip = isEnabled ? "MacMural · ⌘⌥D or Hyper+D to finish" : "MacMural · ⌘⌥D or Hyper+D to draw"
+        statusItem?.button?.toolTip = "MacMural · \(toggleShortcutHint) to \(isEnabled ? "finish" : "draw")"
         if !isEnabled, store.annotations.isEmpty {
             for panel in overlays { panel.orderOut(nil) }
         }
+    }
+
+    @objc private func showShortcutSettings() {
+        setEnabled(false)
+        welcome?.window.orderOut(nil)
+        if shortcutSettings == nil {
+            shortcutSettings = ShortcutSettingsWindow(configuration: shortcuts, onApply: { [weak self] proposed in
+                guard let self else { return "MacMural is unavailable." }
+                return self.applyShortcuts(proposed)
+            }, onRecordingChange: { [weak self] recording in
+                guard let self else { return }
+                self.shortcutErrors = self.hotKey.suspendTogglesForRecording(recording).map {
+                    "\($0.shortcut) (\($0.status))"
+                }
+            })
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        shortcutSettings?.window.center()
+        shortcutSettings?.window.makeKeyAndOrderFront(nil)
+    }
+
+    private func applyShortcuts(_ proposed: ShortcutConfiguration) -> String? {
+        if let error = proposed.validationError ?? SystemShortcuts.error(for: proposed, reserved: SystemShortcuts.current()) { return error }
+        guard !hotKey.isInteractionKeyHeld else { return "Release the hold-to-interact key before applying changes." }
+        let errors = hotKey.register(proposed)
+        guard errors.isEmpty else {
+            return "Could not register \(errors.map { "\($0.shortcut) (\($0.status))" }.joined(separator: ", ")). Another app or macOS may be using it. Your previous shortcuts are still active."
+        }
+        shortcuts = proposed
+        shortcuts.save()
+        shortcutErrors = []
+        interactionShortcutError = nil
+        toggleItem.keyEquivalent = shortcuts[.toggle].menuKey
+        toggleItem.keyEquivalentModifierMask = shortcuts[.toggle].modifiers.cocoa
+        welcome?.window.close()
+        welcome = nil // Recreate help with the current bindings.
+        refresh()
+        return nil
     }
 
     @objc func showWelcome() {

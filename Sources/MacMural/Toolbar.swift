@@ -66,6 +66,7 @@ final class DrawingToolbar {
     private var redoButton: ActionButton!
     private var clearButton: ActionButton!
     private var widthButton: ActionButton!
+    private var doneButton: ActionButton!
     private let caption = NSTextField(labelWithString: "")
 
     init(controller: AppDelegate) {
@@ -97,7 +98,7 @@ final class DrawingToolbar {
 
         for (tool, symbol) in [(DrawingTool.arrow, "arrow.up.right"), (.rectangle, "rectangle"),
                                 (.laser, "laser.burst"), (.pen, "pencil.tip"), (.eraser, "eraser")] {
-            let button = ActionButton(symbol: symbol, label: "\(tool.title) (\(tool.key.uppercased()))") { [weak controller] in
+            let button = ActionButton(symbol: symbol, label: "\(tool.title) (\(controller.shortcutLabel(.tool(tool))))") { [weak controller] in
                 controller?.selectTool(tool)
             }
             // Keep tools visible when a symbol is missing on older macOS versions.
@@ -118,7 +119,7 @@ final class DrawingToolbar {
             add(button)
         }
         divider()
-        widthButton = ActionButton(symbol: "lineweight", label: "Change line width (1 / 2 / 3)") { [weak controller] in
+        widthButton = ActionButton(symbol: "lineweight", label: "Change line width") { [weak controller] in
             controller?.cycleWidth()
         }
         add(widthButton)
@@ -130,10 +131,10 @@ final class DrawingToolbar {
         clearButton = ActionButton(symbol: "trash", label: "Clear drawings (C)") { [weak controller] in controller?.clear() }
         add(clearButton)
         divider()
-        let done = ActionButton(symbol: "checkmark", label: "Finish drawing (⌘⌥D, Hyper+D, or Esc)") { [weak controller] in
+        doneButton = ActionButton(symbol: "checkmark", label: "Finish drawing") { [weak controller] in
             controller?.setEnabled(false)
         }
-        add(done)
+        add(doneButton)
 
         let width = x + 10
         background.frame.size = NSSize(width: width, height: 88)
@@ -145,25 +146,38 @@ final class DrawingToolbar {
     }
 
     func refresh(controller: AppDelegate) {
-        for (tool, button) in tools { button.selected = tool == controller.tool }
+        for (tool, button) in tools {
+            button.selected = tool == controller.tool
+            let label = "\(tool.title) (\(controller.shortcutLabel(.tool(tool))))"
+            button.toolTip = label
+            button.setAccessibilityLabel(label)
+        }
+        for (button, action) in [(undoButton!, ShortcutAction.undo), (redoButton!, .redo), (clearButton!, .clear)] {
+            let label = "\(action.title) (\(controller.shortcutLabel(action)))"
+            button.toolTip = label
+            button.setAccessibilityLabel(label)
+        }
+        doneButton.toolTip = "Finish drawing (\(controller.toggleShortcutHint), \(controller.shortcutLabel(.finish)))"
+        doneButton.setAccessibilityLabel(doneButton.toolTip)
+        let widths = [ShortcutAction.thin, .medium, .thick].map { controller.shortcutLabel($0) }.joined(separator: " / ")
         for (color, button) in colors { button.selected = color == controller.color }
         undoButton.isEnabled = controller.store.canUndo || controller.pendingStroke != nil
         redoButton.isEnabled = controller.store.canRedo
         clearButton.isEnabled = !controller.store.annotations.isEmpty || controller.pendingStroke != nil
         if controller.tool == .eraser {
-            widthButton.toolTip = "Eraser diameter: \(Int(controller.eraserRadius * 2)) pt · click to cycle · 1 / 2 / 3"
-            widthButton.setAccessibilityLabel("Change eraser size (1 / 2 / 3)")
+            widthButton.toolTip = "Eraser diameter: \(Int(controller.eraserRadius * 2)) pt · click to cycle · \(widths)"
+            widthButton.setAccessibilityLabel("Change eraser size (\(widths))")
         } else {
-            widthButton.toolTip = "Line width: \(Int(controller.lineWidth)) pt · click to cycle · 1 / 2 / 3"
-            widthButton.setAccessibilityLabel("Change line width (1 / 2 / 3)")
+            widthButton.toolTip = "Line width: \(Int(controller.lineWidth)) pt · click to cycle · \(widths)"
+            widthButton.setAccessibilityLabel("Change line width (\(widths))")
         }
         let hint: String
         switch controller.tool {
         case .laser: hint = "Click and drag to point"
-        case .eraser: hint = "Drag to erase · ⌘Z to restore"
+        case .eraser: hint = "Drag to erase · \(controller.shortcutLabel(.undo)) to restore"
         default: hint = "Drag to draw · Shift to constrain"
         }
-        let interactionHint = controller.interactionShortcutError == nil ? "Hold Space to interact" : "Space unavailable · see Help"
+        let interactionHint = controller.interactionShortcutError == nil ? "Hold \(controller.shortcutLabel(.interact)) to interact" : "Interaction key unavailable · see Help"
         caption.stringValue = "\(controller.tool.title)  ·  \(hint)  ·  \(interactionHint)  ·  Esc to finish"
     }
 

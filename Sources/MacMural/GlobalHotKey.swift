@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import MacMuralCore
 
 final class GlobalHotKey {
     struct Registration {
@@ -8,12 +9,9 @@ final class GlobalHotKey {
     }
 
     private static let signature: OSType = 0x4D4D524C // MMRL
-    private static let shortcuts: [(name: String, modifiers: UInt32)] = [
-        ("⌘⌥D", UInt32(cmdKey | optionKey)),
-        ("Hyper+D (⌃⌥⌘D)", UInt32(controlKey | optionKey | cmdKey)),
-        ("Hyper+D (⌃⌥⌘⇧D)", UInt32(controlKey | optionKey | cmdKey | shiftKey))
-    ]
-    private var hotKeys: [EventHotKeyRef] = []
+    private var hotKeys: [KeyboardShortcut: (reference: EventHotKeyRef, id: UInt32)] = [:]
+    private var nextID: UInt32 = 1000
+    private var configuration = ShortcutConfiguration.defaults
     private static let interactionID: UInt32 = 100
     private var interactionKey: EventHotKeyRef?
     private var unregisterInteractionOnRelease = false
@@ -22,8 +20,9 @@ final class GlobalHotKey {
     var onPress: (() -> Void)?
     var onInteractionKeyChange: ((Bool) -> Void)?
 
-    func register() -> [Registration] {
-        unregister()
+    func register(_ configuration: ShortcutConfiguration) -> [Registration] {
+        if handler != nil { return replaceShortcuts(configuration) }
+
         let events = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
@@ -41,7 +40,7 @@ final class GlobalHotKey {
             let isPressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
             if pressed.id == GlobalHotKey.interactionID {
                 hotKey.handleInteractionKey(held: isPressed)
-            } else if isPressed, (1...UInt32(GlobalHotKey.shortcuts.count)).contains(pressed.id) {
+            } else if isPressed, hotKey.hotKeys.values.contains(where: { $0.id == pressed.id }) {
                 hotKey.onPress?()
             }
             return noErr
@@ -50,19 +49,54 @@ final class GlobalHotKey {
             InstallEventHandler(GetApplicationEventTarget(), callback, 2, $0.baseAddress, context, &handler)
         }
         guard status == noErr else {
-            return Self.shortcuts.map { Registration(shortcut: $0.name, status: status) }
+            return configuration.toggleShortcuts.map { Registration(shortcut: $0.display, status: status) }
         }
-        return Self.shortcuts.enumerated().map { index, shortcut in
-            let id = EventHotKeyID(signature: Self.signature, id: UInt32(index + 1))
-            var reference: EventHotKeyRef?
-            let result = RegisterEventHotKey(UInt32(kVK_ANSI_D), shortcut.modifiers, id,
-                                             GetApplicationEventTarget(), 0, &reference)
-            if result == noErr, let reference { hotKeys.append(reference) }
-            return Registration(shortcut: shortcut.name, status: result)
-        }
+        return replaceShortcuts(configuration, preserveOnFailure: false)
     }
 
-    /// Bare Space is captured only during a drawing session. Carbon consumes
+    /// Register new chords before releasing old ones so a conflict cannot remove a working shortcut.
+    private func replaceShortcuts(_ proposed: ShortcutConfiguration, preserveOnFailure: Bool = true) -> [Registration] {
+        var replacements: [KeyboardShortcut: (reference: EventHotKeyRef, id: UInt32)] = [:]
+        var errors: [Registration] = []
+        for shortcut in proposed.toggleShortcuts {
+            if let existing = hotKeys[shortcut] {
+                replacements[shortcut] = existing
+                continue
+            }
+            let id = nextID
+            nextID += 1
+            var reference: EventHotKeyRef?
+            let status = RegisterEventHotKey(UInt32(shortcut.keyCode), shortcut.modifiers.carbon,
+                                            EventHotKeyID(signature: Self.signature, id: id),
+                                            GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &reference)
+            if status == noErr, let reference { replacements[shortcut] = (reference, id) }
+            else { errors.append(Registration(shortcut: shortcut.display, status: status)) }
+        }
+        if preserveOnFailure && !errors.isEmpty {
+            for (shortcut, registration) in replacements where hotKeys[shortcut] == nil {
+                UnregisterEventHotKey(registration.reference)
+            }
+            return errors
+        }
+        for (shortcut, registration) in hotKeys where replacements[shortcut] == nil {
+            UnregisterEventHotKey(registration.reference)
+        }
+        hotKeys = replacements
+        configuration = proposed
+        return errors
+    }
+
+    func suspendTogglesForRecording(_ suspended: Bool) -> [Registration] {
+        if suspended {
+            for registration in hotKeys.values { UnregisterEventHotKey(registration.reference) }
+            hotKeys.removeAll()
+            return []
+        }
+        if handler == nil { return register(configuration) }
+        return replaceShortcuts(configuration, preserveOnFailure: false)
+    }
+
+    /// The interaction key is captured only during a drawing session. Carbon consumes
     /// the key globally, including repeats after the underlying app gains focus.
     func setInteractionKeyEnabled(_ enabled: Bool) -> OSStatus {
         if enabled {
@@ -70,11 +104,11 @@ final class GlobalHotKey {
             if interactionKey != nil { return noErr }
             guard handler != nil else { return OSStatus(eventNotHandledErr) }
             let id = EventHotKeyID(signature: Self.signature, id: Self.interactionID)
-            return RegisterEventHotKey(UInt32(kVK_Space), 0, id, GetApplicationEventTarget(),
+            return RegisterEventHotKey(UInt32(configuration[.interact].keyCode), 0, id, GetApplicationEventTarget(),
                                        OptionBits(kEventHotKeyExclusive), &interactionKey)
         }
         if isInteractionKeyHeld {
-            // Keep swallowing repeats if drawing closes before Space is released.
+            // Keep swallowing repeats if drawing closes before the interaction key is released.
             unregisterInteractionOnRelease = true
         } else {
             unregisterInteractionKey()
@@ -98,7 +132,7 @@ final class GlobalHotKey {
 
     private func unregister() {
         unregisterInteractionKey()
-        for hotKey in hotKeys { UnregisterEventHotKey(hotKey) }
+        for registration in hotKeys.values { UnregisterEventHotKey(registration.reference) }
         hotKeys.removeAll()
         if let handler { RemoveEventHandler(handler) }
         handler = nil

@@ -36,10 +36,10 @@ final class WelcomeWindow: NSObject {
         content.addSubview(preview)
 
         let shortcutRows: [(String, String, String, String)] = [
-            ("⌘ ⌥ D", "Start / finish drawing", "A", "Arrow"),
-            ("L", "Click + drag laser", "R", "Rectangle"),
-            ("C", "Clear all drawings", "⌘ Z", "Undo · ⇧⌘Z to redo"),
-            ("D", "Freehand pen", "E", "Eraser · ⌘Z to restore")
+            (controller.shortcutLabel(.toggle), "Start / finish drawing", controller.shortcutLabel(.arrow), "Arrow"),
+            (controller.shortcutLabel(.laser), "Click + drag laser", controller.shortcutLabel(.rectangle), "Rectangle"),
+            (controller.shortcutLabel(.clear), "Clear all drawings", controller.shortcutLabel(.undo), "Undo · \(controller.shortcutLabel(.redo)) to redo"),
+            (controller.shortcutLabel(.pen), "Freehand pen", controller.shortcutLabel(.eraser), "Eraser" )
         ]
         for (index, row) in shortcutRows.enumerated() {
             let y = CGFloat(284 - index * 39)
@@ -48,6 +48,8 @@ final class WelcomeWindow: NSObject {
                 cap.frame = NSRect(x: x, y: y, width: 69, height: 27)
                 cap.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
                 cap.alignment = .center
+                cap.lineBreakMode = .byTruncatingMiddle
+                cap.toolTip = key
                 cap.drawsBackground = true
                 cap.backgroundColor = NSColor.black.withAlphaComponent(0.055)
                 cap.wantsLayer = true
@@ -64,7 +66,7 @@ final class WelcomeWindow: NSObject {
         content.addSubview(message)
         setShortcutErrors([])
 
-        let start = NSButton(title: "Start drawing   ⌘⌥D", target: self, action: #selector(startDrawing))
+        let start = NSButton(title: "Start drawing   \(controller.shortcutLabel(.toggle))", target: self, action: #selector(startDrawing))
         start.frame = NSRect(x: 36, y: 43, width: 528, height: 44)
         start.bezelStyle = .rounded
         start.controlSize = .large
@@ -78,7 +80,9 @@ final class WelcomeWindow: NSObject {
 
     func setShortcutErrors(_ errors: [String]) {
         if errors.isEmpty {
-            message.stringValue = "Hyper+D also toggles drawing. Hold Space to interact underneath; release to resume. Esc finishes and clears. Hold Shift to constrain shapes."
+            let hyperHint = controller?.shortcuts.hyperEnabled == true ? "Hyper+D also toggles drawing. " : ""
+            let interactionKey = controller?.shortcutLabel(.interact) ?? "Space"
+            message.stringValue = "\(hyperHint)Hold \(interactionKey) to interact underneath. Esc finishes and clears. Change keys in the menu bar’s Keyboard Shortcuts… settings."
             message.textColor = .secondaryLabelColor
         } else {
             message.stringValue = "Unavailable shortcuts: \(errors.joined(separator: ", ")). Another app may be using them. Other shortcuts and the menu bar remain available."
