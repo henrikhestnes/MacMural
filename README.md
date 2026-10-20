@@ -12,7 +12,29 @@ Or install through [the Homebrew tap](https://github.com/henrikhestnes/homebrew-
 brew install --cask henrikhestnes/tap/macmural
 ```
 
-The current build is ad-hoc signed and has not been notarized by Apple, so Gatekeeper may block it on another Mac. The cask does not disable or bypass Gatekeeper. Developer ID signing and notarization are needed for a normal Gatekeeper experience. You can also build from source using the instructions below.
+After installation, open **MacMural** from **Applications**. You can also run:
+
+```sh
+open /Applications/MacMural.app
+```
+
+### First launch: approve MacMural
+
+MacMural is ad-hoc signed and has not been notarized by Apple. macOS may show **“MacMural” Not Opened** and say Apple could not verify that the app is free of malware. This also applies to the Homebrew installation.
+
+If you installed MacMural from the GitHub Releases page or the Homebrew tap linked above, follow these steps to approve it:
+
+1. Try opening **MacMural** from **Applications**. In the blocked-app dialog, click **Done**.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down to **Security** and find the message about MacMural being blocked.
+4. Click **Open Anyway** beside MacMural.
+5. Authenticate if prompted, then confirm **Open** in the follow-up dialog.
+
+If **Open Anyway** is not visible, try opening MacMural again and return to Privacy & Security. On a managed Mac, your organization's policy may prevent approval.
+
+This grants an exception for MacMural. Later builds may need approval again. The Homebrew cask preserves macOS security checks; it does not remove quarantine attributes or disable Gatekeeper. See [Apple’s instructions for opening apps](https://support.apple.com/en-us/102445).
+
+Once open, MacMural lives in your menu bar. Press **Control + Shift + D** (or your configured shortcut) to start drawing. Check **Launch at Login** in the menu if you want it to start when you sign in; macOS may require separate login-item approval.
 
 ## Launch at login
 
