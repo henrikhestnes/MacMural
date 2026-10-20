@@ -75,17 +75,22 @@ if [[ "${actual_repository:l}" != "${repository:l}" ]]; then
 fi
 git fetch origin main --tags
 git merge-base --is-ancestor origin/main HEAD
-git add Casks/macmural.rb README.md scripts/publish.sh "$notes"
-if ! git diff --cached --quiet; then
-  git commit -m "Add Homebrew cask and release publishing for $tag"
-fi
-git push origin main
+# Allow publication-only fixes when resuming, while keeping the app's tag fixed.
 if git rev-parse --verify "$tag" >/dev/null 2>&1; then
-  if [[ "$(git rev-parse "$tag^{commit}")" != "$(git rev-parse HEAD)" ]]; then
-    print -u2 "$tag already refers to another commit. Use a new app version instead of moving a published tag."
+  if ! git merge-base --is-ancestor "$tag^{commit}" HEAD || \
+     ! git diff --quiet "$tag^{commit}" HEAD -- . \
+       ':(exclude)Casks/macmural.rb' ':(exclude)README.md' \
+       ':(exclude)scripts/publish.sh' ":(exclude)$notes"; then
+    print -u2 "$tag contains different app code. Use a new app version instead of moving the tag."
     exit 1
   fi
-else
+fi
+git add Casks/macmural.rb README.md scripts/publish.sh "$notes"
+if ! git diff --cached --quiet; then
+  git commit -m "Update Homebrew cask and release publishing for $tag"
+fi
+git push origin main
+if ! git rev-parse --verify "$tag" >/dev/null 2>&1; then
   git tag -a "$tag" -m "MacMural $version"
 fi
 git push origin "refs/tags/$tag"
@@ -109,9 +114,31 @@ verification_dir=$(mktemp -d "${TMPDIR:-/tmp}/macmural-release.XXXXXX")
 gh release download "$tag" --repo "$repository" --pattern MacMural.zip --dir "$verification_dir"
 cmp "$asset" "$verification_dir/MacMural.zip"
 
-gh repo edit "$repository" --visibility public --accept-visibility-change-consequences
 if [[ "$release_state" == "draft" ]]; then
-  gh release edit "$tag" --repo "$repository" --draft=false --latest
+  # Re-resolve the draft each time; a failed response may follow a successful edit.
+  for attempt in 1 2 3 4; do
+    if gh release edit "$tag" --repo "$repository" --draft=false --latest; then
+      release_state="published"
+      break
+    fi
+    if [[ "$(gh release view "$tag" --repo "$repository" --json isDraft --jq .isDraft)" == "false" ]]; then
+      release_state="published"
+      break
+    fi
+    if (( attempt < 4 )); then
+      print -u2 "Publishing failed; retrying in 3 seconds ($attempt/4)."
+      sleep 3
+    fi
+  done
+  if [[ "$release_state" != "published" ]]; then
+    print -u2 "GitHub could not publish $tag. The existing tag and ZIP have been preserved."
+    print -u2 "Resolve the GitHub error above, then rerun ./scripts/publish.sh to resume."
+    exit 1
+  fi
+fi
+# Publish before changing visibility to avoid switching access during draft edits.
+if [[ "$(gh repo view "$repository" --json isPrivate --jq .isPrivate)" == "true" ]]; then
+  gh repo edit "$repository" --visibility public --accept-visibility-change-consequences
 fi
 
 # Check the public download without authentication and without installing it.
