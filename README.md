@@ -14,6 +14,14 @@ brew install --cask henrikhestnes/tap/macmural
 
 The current build is ad-hoc signed and has not been notarized by Apple, so Gatekeeper may block it on another Mac. The cask does not disable or bypass Gatekeeper. Developer ID signing and notarization are needed for a normal Gatekeeper experience. You can also build from source using the instructions below.
 
+## Launch at login
+
+Starting with v1.4.0, MacMural requests **Launch at Login** on its first launch from `/Applications` or your user’s `Applications` folder. Each user must open the app once after installation. The menu bar’s **Launch at Login** checkbox shows the actual macOS state and lets you turn it off or on. Changes made in System Settings are respected; the app does not automatically re-enable a disabled login item.
+
+If macOS requires approval, the checkbox shows a mixed state and **Open Login Settings…** takes you to the approval controls. Registration failures are shown in **Launch at Login Error…**, with an option to open those settings. Successful registration must be checked with the installed build, particularly with the current ad-hoc signature.
+
+Login startup is quiet: drawing remains off and the welcome window stays hidden. The welcome window appears once on the first manual launch and remains available through **Shortcuts & Help…**. Local builds in `dist/` do not register themselves as login items; install the app in Applications and reopen it to test that feature.
+
 ## Shortcuts
 
 Open **MacMural’s menu bar icon → Keyboard Shortcuts…** to change the global toggle, drawing tools, clear, undo/redo, line sizes, finish, or the hold-to-interact key. Click a shortcut, press your desired keys, then click **Apply**. **Restore Defaults** resets the editor; click Apply to save the reset. You can also turn the Hyper+D aliases off.

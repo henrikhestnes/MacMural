@@ -1,7 +1,7 @@
 import AppKit
 import MacMuralCore
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let store = DrawingStore()
     private(set) var tool = DrawingTool(rawValue: UserDefaults.standard.string(forKey: "tool") ?? "") ?? .arrow
     private(set) var color = InkColor(rawValue: UserDefaults.standard.string(forKey: "color") ?? "") ?? .coral
@@ -37,6 +37,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previousApplication: NSRunningApplication?
     private var welcome: WelcomeWindow?
     private var shortcutErrors: [String] = []
+    private let launchAtLogin = LaunchAtLoginController(service: NativeLoginItemService())
+    private var loginItem: NSMenuItem!
+    private var loginSettingsItem: NSMenuItem!
+    private var loginErrorItem: NSMenuItem!
+    private var isLoginLaunch = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        isLoginLaunch = NativeLoginItemService.isLoginLaunch
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -61,10 +70,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(willSleep),
                                                          name: NSWorkspace.willSleepNotification, object: nil)
+        isLoginLaunch = isLoginLaunch || NativeLoginItemService.isLoginLaunch
+        if !CommandLine.arguments.contains("--demo") {
+            launchAtLogin.configureDefaultIfNeeded(isInstalled: NativeLoginItemService.isInstalled)
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshLoginMenu),
+                                               name: NSApplication.didBecomeActiveNotification, object: nil)
+        refreshLoginMenu()
         refresh()
         if CommandLine.arguments.contains("--demo") {
             showDemo()
-        } else {
+        } else if launchAtLogin.shouldShowWelcome(isLoginLaunch: isLoginLaunch) {
             showWelcome()
         }
     }
@@ -97,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "pencil.tip.crop.circle", accessibilityDescription: "MacMural")
         let menu = NSMenu()
+        menu.autoenablesItems = false
         let name = NSMenuItem(title: "MacMural", action: nil, keyEquivalent: "")
         name.isEnabled = false
         menu.addItem(name)
@@ -112,8 +129,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Keyboard Shortcuts…", action: #selector(showShortcutSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Shortcuts & Help…", action: #selector(showWelcome), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        loginItem.target = self
+        menu.addItem(loginItem)
+        loginSettingsItem = NSMenuItem(title: "Open Login Settings…", action: #selector(openLoginSettings), keyEquivalent: "")
+        loginSettingsItem.target = self
+        menu.addItem(loginSettingsItem)
+        loginErrorItem = NSMenuItem(title: "Launch at Login Error…", action: #selector(showLoginError), keyEquivalent: "")
+        loginErrorItem.target = self
+        menu.addItem(loginErrorItem)
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit MacMural", action: #selector(quit), keyEquivalent: "q").target = self
+        menu.delegate = self
         statusItem.menu = menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) { refreshLoginMenu() }
+
+    @objc private func refreshLoginMenu() {
+        guard loginItem != nil else { return }
+        let state = launchAtLogin.status
+        loginItem.state = state == .enabled ? .on : state == .requiresApproval ? .mixed : .off
+        // A development bundle must not become the user's persistent login item.
+        loginItem.isEnabled = NativeLoginItemService.isInstalled
+        loginItem.toolTip = NativeLoginItemService.isInstalled
+            ? "Start MacMural quietly when you log in."
+            : "Move MacMural to Applications to enable launch at login."
+        loginSettingsItem.isHidden = state != .requiresApproval && launchAtLogin.errorMessage == nil
+        loginErrorItem.isHidden = launchAtLogin.errorMessage == nil
+        welcome?.setLoginNotice(loginNotice)
+    }
+
+    private var loginNotice: String {
+        if !NativeLoginItemService.isInstalled { return "Install in Applications to enable Launch at Login." }
+        if launchAtLogin.errorMessage != nil { return "Launch at Login failed. Open the menu’s Launch at Login Error… for details." }
+        switch launchAtLogin.status {
+        case .enabled: return "Launch at Login is on. Change it from MacMural’s menu bar icon."
+        case .requiresApproval: return "Launch at Login needs approval. Choose Open Login Settings… from the menu."
+        case .notRegistered, .notFound: return "Launch at Login is off. Enable it from MacMural’s menu bar icon."
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        guard NativeLoginItemService.isInstalled else { return }
+        launchAtLogin.setEnabled(!launchAtLogin.status.isRequested)
+        refreshLoginMenu()
+    }
+    @objc private func openLoginSettings() { NativeLoginItemService.openSettings() }
+    @objc private func showLoginError() {
+        guard let error = launchAtLogin.errorMessage else { return }
+        let alert = NSAlert()
+        alert.messageText = "Launch at Login could not be changed"
+        alert.informativeText = error + "\n\nYou can manage MacMural in macOS Login Items settings."
+        alert.addButton(withTitle: "Open Login Settings")
+        alert.addButton(withTitle: "Close")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn { NativeLoginItemService.openSettings() }
     }
 
     @objc private func toggleDrawing() { setEnabled(!isEnabled) }
@@ -454,6 +526,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setEnabled(false)
         if welcome == nil { welcome = WelcomeWindow(controller: self) }
         welcome?.setShortcutErrors(shortcutErrors + [interactionShortcutError].compactMap { $0 })
+        welcome?.setLoginNotice(loginNotice)
+        launchAtLogin.markWelcomeShown()
         NSApp.activate(ignoringOtherApps: true)
         welcome?.window.center()
         welcome?.window.makeKeyAndOrderFront(nil)

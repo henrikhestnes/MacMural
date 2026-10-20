@@ -5,6 +5,7 @@ final class WelcomeWindow: NSObject {
     let window: NSWindow
     private weak var controller: AppDelegate?
     private let message = NSTextField(wrappingLabelWithString: "")
+    private let loginNotice = NSTextField(labelWithString: "")
 
     init(controller: AppDelegate) {
         self.controller = controller
@@ -65,6 +66,11 @@ final class WelcomeWindow: NSObject {
         message.textColor = .secondaryLabelColor
         content.addSubview(message)
         setShortcutErrors([])
+        loginNotice.frame = NSRect(x: 38, y: 88, width: 524, height: 16)
+        loginNotice.font = .systemFont(ofSize: 10)
+        loginNotice.textColor = .secondaryLabelColor
+        loginNotice.lineBreakMode = .byTruncatingTail
+        content.addSubview(loginNotice)
 
         let start = NSButton(title: "Start drawing   \(controller.shortcutLabel(.toggle))", target: self, action: #selector(startDrawing))
         start.frame = NSRect(x: 36, y: 43, width: 528, height: 44)
@@ -88,6 +94,11 @@ final class WelcomeWindow: NSObject {
             message.stringValue = "Unavailable shortcuts: \(errors.joined(separator: ", ")). Another app may be using them. Other shortcuts and the menu bar remain available."
             message.textColor = .systemRed
         }
+    }
+
+    func setLoginNotice(_ text: String) {
+        loginNotice.stringValue = text
+        loginNotice.toolTip = text
     }
 
     @objc private func startDrawing() {
