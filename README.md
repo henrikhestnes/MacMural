@@ -4,7 +4,16 @@ A small native macOS menu bar app for drawing over your screen. Built with Swift
 
 ## Install
 
-Build the app using the instructions below, then open `dist/MacMural.zip`, drag **MacMural.app** to **Applications**, and open it. The app lives in the menu bar; it does not add a Dock icon. The local build is ad-hoc signed. Distribution to other Macs requires Developer ID signing and notarization for a normal Gatekeeper experience.
+Download **MacMural.zip** from [GitHub Releases](https://github.com/henrikhestnes/MacMural/releases/latest), unzip it, drag **MacMural.app** to **Applications**, and open it. The app lives in the menu bar; it does not add a Dock icon.
+
+Or install through Homebrew using the cask in this same repository:
+
+```sh
+brew tap henrikhestnes/macmural https://github.com/henrikhestnes/MacMural.git
+brew install --cask henrikhestnes/macmural/macmural
+```
+
+The current build is ad-hoc signed and has not been notarized by Apple, so Gatekeeper may block it on another Mac. The cask does not disable or bypass Gatekeeper. Developer ID signing and notarization are needed for a normal Gatekeeper experience. You can also build from source using the instructions below.
 
 ## Shortcuts
 
@@ -51,3 +60,18 @@ ditto dist/MacMural.app /Applications/MacMural.app
 ```
 
 `MacMuralCore` contains gesture geometry, bounded undo/redo history, drawing input state, and laser expiration logic. `MacMural` owns event routing, the global Carbon hotkeys, transparent per-display panels, and the native toolbar. Space press and release are handled by a temporary Carbon hotkey registration, including while another app has focus. No modifier polling or global keyboard monitor is needed. The laser animates only while a trail is fading. A mouse-button timer runs only when Space has been released during an underlying drag, stopping when that drag ends. Both timers stop when drawing closes; ordinary drawing redraws only when input changes.
+
+## Publish a release
+
+The repository also acts as the Homebrew tap. `Casks/macmural.rb` points to the versioned GitHub Release asset and pins its SHA-256 checksum.
+
+To publish the prepared release, run from a terminal with GitHub access:
+
+```sh
+./scripts/publish.sh --check  # validate locally without GitHub access
+./scripts/publish.sh          # publish the app and make this repository public
+```
+
+The publishing script checks the app, ZIP, cask, release notes, and Git email before committing only the release-related files. It uploads a draft release, verifies the uploaded ZIP, makes the repository public, publishes the release, and checks the public ZIP and cask. It never replaces an existing release asset or moves an existing tag to another commit.
+
+For future releases, update `Resources/Info.plist`, build a universal app, update the cask version and checksum, and add matching release notes under `releases/`. Commit application changes before publishing. Published ZIPs and their checksums must remain unchanged.
