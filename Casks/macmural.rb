@@ -1,6 +1,6 @@
 cask "macmural" do
-  version "1.4.0"
-  sha256 "3982799f6c8b71b63227ded83af2099faab911be846fa9e4ecbfe09ab07afeb2"
+  version "1.5.0"
+  sha256 "d3ff3849f78ce14cd0fa19e5d105b037389094c2784bd288df351db27867b5fc"
 
   url "https://github.com/henrikhestnes/MacMural/releases/download/v#{version}/MacMural.zip"
   name "MacMural"

@@ -34,7 +34,7 @@ If **Open Anyway** is not visible, try opening MacMural again and return to Priv
 
 This grants an exception for MacMural. Later builds may need approval again. The Homebrew cask preserves macOS security checks; it does not remove quarantine attributes or disable Gatekeeper. See [Apple’s instructions for opening apps](https://support.apple.com/en-us/102445).
 
-Once open, MacMural lives in your menu bar. Press **Control + Shift + D** (or your configured shortcut) to start drawing. Check **Launch at Login** in the menu if you want it to start when you sign in; macOS may require separate login-item approval.
+Once open, MacMural lives in your menu bar. Opening the app starts drawing mode; press **Control + Shift + D** (or your configured shortcut) to toggle it. Check **Launch at Login** in the menu if you want it to start when you sign in; macOS may require separate login-item approval.
 
 ## Launch at login
 
@@ -42,7 +42,7 @@ Starting with v1.4.0, MacMural requests **Launch at Login** on its first launch 
 
 If macOS requires approval, the checkbox shows a mixed state and **Open Login Settings…** takes you to the approval controls. Registration failures are shown in **Launch at Login Error…**, with an option to open those settings. Successful registration must be checked with the installed build, particularly with the current ad-hoc signature.
 
-Login startup is quiet: drawing remains off and the welcome window stays hidden. The welcome window appears once on the first manual launch and remains available through **Shortcuts & Help…**. Local builds in `dist/` do not register themselves as login items; install the app in Applications and reopen it to test that feature.
+Login startup is quiet: drawing remains off and the welcome window stays hidden. The welcome window appears once on the first manual launch and remains available through **Shortcuts & Help…**. Every other manual launch, including opening the app again while it is running, starts in drawing mode. Local builds in `dist/` do not register themselves as login items; install the app in Applications and reopen it to test that feature.
 
 ## Shortcuts
 

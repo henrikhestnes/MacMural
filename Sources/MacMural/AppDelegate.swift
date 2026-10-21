@@ -82,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showDemo()
         } else if launchAtLogin.shouldShowWelcome(isLoginLaunch: isLoginLaunch) {
             showWelcome()
+        } else if !isLoginLaunch {
+            setEnabled(true)
         }
     }
 
@@ -97,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if inputState.acceptsDrawingInput { focusCanvas() }
-        else if !isEnabled { showWelcome() }
+        else if !isEnabled { setEnabled(true) }
         return true
     }
 
