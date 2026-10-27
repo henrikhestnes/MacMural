@@ -34,7 +34,7 @@ If **Open Anyway** is not visible, try opening MacMural again and return to Priv
 
 This grants an exception for MacMural. Later builds may need approval again. The Homebrew cask preserves macOS security checks; it does not remove quarantine attributes or disable Gatekeeper. See [Apple’s instructions for opening apps](https://support.apple.com/en-us/102445).
 
-Once open, MacMural lives in your menu bar. Opening the app starts drawing mode; press **Control + Shift + D** (or your configured shortcut) to toggle it. Check **Launch at Login** in the menu if you want it to start when you sign in; macOS may require separate login-item approval.
+Once open, MacMural lives in your menu bar. Opening the app starts drawing mode; press **Control + Shift + D** (or your configured shortcut) to toggle it. MacMural starts when you sign in; turn this off with **Launch at Login** in the menu.
 
 ## Launch at login
 
