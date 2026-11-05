@@ -19,7 +19,9 @@ mv -f "$app/Contents/MacOS/MacMural.new" "$app/Contents/MacOS/MacMural"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 swift scripts/make-icon.swift "$PWD/dist"
 cp "$PWD/dist/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
-codesign --force --sign - --identifier io.macmural.app "$app"
+# The hardened runtime enables library validation and ignores DYLD_* variables, so another process
+# cannot inject code into the app. It works with an ad-hoc signature.
+codesign --force --options runtime --sign - --identifier io.macmural.app "$app"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$PWD/dist/MacMural.zip"
 echo "Built: $app"
 echo "Install: drag MacMural.app to Applications, then open it."

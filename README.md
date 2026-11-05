@@ -90,7 +90,7 @@ swift test --disable-sandbox
 open dist/MacMural.app
 ```
 
-The build script creates `dist/MacMural.app` and `dist/MacMural.zip`. It creates the icon locally, uses only system frameworks, and ad-hoc signs the bundle. To install without Finder:
+The build script creates `dist/MacMural.app` and `dist/MacMural.zip`. It creates the icon locally, uses only system frameworks, and ad-hoc signs the bundle with the hardened runtime. To install without Finder:
 
 ```sh
 ditto dist/MacMural.app /Applications/MacMural.app
