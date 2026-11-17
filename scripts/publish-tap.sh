@@ -99,7 +99,7 @@ Update with `brew update` and `brew upgrade --cask macmural`.
 
 MacMural’s source and release downloads are hosted in [henrikhestnes/MacMural](https://github.com/henrikhestnes/MacMural). This repository contains the Homebrew cask, pinned to a published release and its SHA-256 checksum.
 
-The app is ad-hoc signed and is not notarized by Apple. This cask does not disable or bypass Gatekeeper.
+The app is signed with a self-signed certificate and is not notarized by Apple. This cask does not disable or bypass Gatekeeper.
 MD
   git -C "$work/repo" add README.md
 fi

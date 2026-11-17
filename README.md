@@ -20,7 +20,7 @@ open /Applications/MacMural.app
 
 ### First launch: approve MacMural
 
-MacMural is ad-hoc signed and has not been notarized by Apple. macOS may show **“MacMural” Not Opened** and say Apple could not verify that the app is free of malware. This also applies to the Homebrew installation.
+MacMural is signed with a self-signed certificate and has not been notarized by Apple. macOS may show **“MacMural” Not Opened** and say Apple could not verify that the app is free of malware. This also applies to the Homebrew installation.
 
 If you installed MacMural from the GitHub Releases page or the Homebrew tap linked above, follow these steps to approve it:
 
@@ -40,9 +40,9 @@ Once open, MacMural lives in your menu bar. Opening the app starts drawing mode;
 
 Starting with v1.4.0, MacMural requests **Launch at Login** on its first launch from `/Applications` or your user’s `Applications` folder. Each user must open the app once after installation. The menu bar’s **Launch at Login** checkbox shows the actual macOS state and lets you turn it off or on. Changes made in System Settings are respected; the app does not automatically re-enable a disabled login item.
 
-If macOS requires approval, the checkbox shows a mixed state and **Open Login Settings…** takes you to the approval controls. Registration failures are shown in **Launch at Login Error…**, with an option to open those settings. Successful registration must be checked with the installed build, particularly with the current ad-hoc signature.
+If macOS requires approval, the checkbox shows a mixed state and **Open Login Settings…** takes you to the approval controls. Registration failures are shown in **Launch at Login Error…**, with an option to open those settings. Successful registration must be checked with the installed build.
 
-Login startup is quiet: drawing remains off and the welcome window stays hidden. The welcome window appears once on the first manual launch and remains available through **Shortcuts & Help…**. Every other manual launch, including opening the app again while it is running, starts in drawing mode. Local builds in `dist/` do not register themselves as login items; install the app in Applications and reopen it to test that feature.
+Login startup is quiet: drawing remains off and the welcome window stays hidden. The welcome window appears once on the first manual launch and remains available through **Shortcuts & Help…**. Every other manual launch, including opening the app again while it is running, starts in drawing mode. Local builds in `dist.noindex/` do not register themselves as login items; install the app in Applications and reopen it to test that feature.
 
 ## Shortcuts
 
@@ -87,13 +87,13 @@ Requires Xcode or Apple's Command Line Tools with Swift 5.9 or newer.
 swift test --disable-sandbox
 ./scripts/build.sh              # current Mac architecture
 ./scripts/build.sh --universal  # Apple Silicon + Intel
-open dist/MacMural.app
+open dist.noindex/MacMural.app
 ```
 
-The build script creates `dist/MacMural.app` and `dist/MacMural.zip`. It creates the icon locally, uses only system frameworks, and ad-hoc signs the bundle with the hardened runtime. To install without Finder:
+The build script creates `dist.noindex/MacMural.app` and `dist.noindex/MacMural.zip`. It creates the icon locally, uses only system frameworks, and signs the bundle with the hardened runtime, using the "MacSnip Release" certificate when it is in the keychain and an ad-hoc signature otherwise. To install without Finder:
 
 ```sh
-ditto dist/MacMural.app /Applications/MacMural.app
+ditto dist.noindex/MacMural.app /Applications/MacMural.app
 ```
 
 `MacMuralCore` contains gesture geometry, bounded undo/redo history, drawing input state, and laser expiration logic. `MacMural` owns event routing, the global Carbon hotkeys, transparent per-display panels, and the native toolbar. The hold-to-interact key’s press and release are handled by a temporary Carbon hotkey registration, including while another app has focus. No modifier polling or global keyboard monitor is needed. The laser animates only while a trail is fading. A mouse-button timer runs only when Space has been released during an underlying drag, stopping when that drag ends. Both timers stop when drawing closes; ordinary drawing redraws only when input changes.

@@ -11,7 +11,7 @@ repository="henrikhestnes/MacMural"
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 tag="v$version"
 notes="releases/$tag.md"
-asset="$PWD/dist/MacMural.zip"
+asset="$PWD/dist.noindex/MacMural.zip"
 
 # These checks do not access GitHub, install anything, or launch the app.
 python3 - "$version" "$notes" <<'PY'
@@ -38,11 +38,11 @@ if changed - allowed:
     raise SystemExit('Commit or set aside unrelated changes first: ' + ', '.join(sorted(changed - allowed)))
 cask = Path('Casks/macmural.rb').read_text()
 assert re.search(r'^  version "' + re.escape(version) + r'"$', cask, re.M), 'Cask version does not match the app.'
-asset = Path('dist/MacMural.zip')
+asset = Path('dist.noindex/MacMural.zip')
 checksum = hashlib.sha256(asset.read_bytes()).hexdigest()
 assert f'  sha256 "{checksum}"' in cask, 'Cask checksum does not match the release ZIP. Update it first.'
 assert checksum in Path(notes).read_text(), 'Release notes checksum does not match the ZIP.'
-bundle = Path('dist/MacMural.app')
+bundle = Path('dist.noindex/MacMural.app')
 architectures = subprocess.check_output(['lipo', '-archs', str(bundle / 'Contents/MacOS/MacMural')], text=True).split()
 assert {'arm64', 'x86_64'} <= set(architectures), 'The release must support Apple Silicon and Intel.'
 with ZipFile(asset) as archive:
@@ -54,10 +54,15 @@ with ZipFile(asset) as archive:
         assert archive.read('MacMural.app/' + name) == (bundle / name).read_bytes(), 'ZIP differs from the local bundle: ' + name
 print(f'Validated MacMural {version}, release notes, cask, ZIP, and commit email.')
 PY
-codesign --verify --deep --strict dist/MacMural.app
+codesign --verify --deep --strict dist.noindex/MacMural.app
 # Every release must use the hardened runtime (./scripts/build.sh signs with --options runtime).
-if [[ ! "$(codesign -d --verbose=1 dist/MacMural.app 2>&1)" =~ 'flags=0x[0-9a-f]+\([^)]*runtime' ]]; then
+if [[ ! "$(codesign -d --verbose=1 dist.noindex/MacMural.app 2>&1)" =~ 'flags=0x[0-9a-f]+\([^)]*runtime' ]]; then
   print -u2 'The app is not signed with the hardened runtime. Rebuild with ./scripts/build.sh --universal.'
+  exit 1
+fi
+# Every release is signed with the same certificate, so a copy signed by anyone else is detectable.
+if [[ "$(codesign -dr - dist.noindex/MacMural.app 2>&1)" != *'identifier "io.macmural.app" and certificate leaf = H"60e479dee9ef30d9ac25735c29c78e492c875bea"'* ]]; then
+  print -u2 'Sign the release with the "MacSnip Release" certificate (./scripts/build.sh --universal).'
   exit 1
 fi
 ruby -c Casks/macmural.rb

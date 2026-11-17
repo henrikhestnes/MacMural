@@ -16,6 +16,6 @@ cask "macmural" do
   zap trash: "~/Library/Preferences/io.macmural.app.plist"
 
   caveats <<~EOS
-    This build is ad-hoc signed and has not been notarized by Apple.
+    This build is signed with a self-signed certificate and has not been notarized by Apple.
   EOS
 end
